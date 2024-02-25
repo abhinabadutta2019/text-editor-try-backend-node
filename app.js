@@ -46,8 +46,8 @@ const rooms = {};
 io.on("connection", (socket) => {
   console.log("a user connected");
 
-  // Join a room and update user list
-  socket.on("joinRoom", async (roomId, userId) => {
+  // Inside the connection event handler in your server-side code
+  socket.on("joinRoom", async ({ roomId, userId }) => {
     try {
       let doc = await Document.findById(roomId);
       if (!doc) {

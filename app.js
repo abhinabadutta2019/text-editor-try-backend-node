@@ -1,3 +1,4 @@
+// Import necessary modules
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -6,57 +7,85 @@ const server = http.createServer(app);
 const { Server } = require("socket.io");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
-const Document = require("./Document.js"); // Assuming Document model for MongoDB
+const Document = require("./models/Document.js");
+const authRoutes = require("./routes/authRoutes.js");
+const documentRoutes = require("./routes/documentRoutes.js");
 
-dotenv.config(); // Load environment variables
+// Load environment variables
+dotenv.config();
+//
+app.use(express.json());
+app.use(cors());
+//
 
+// MongoDB connection URI
 let uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.te788iv.mongodb.net/text-editor-try-feb-24?retryWrites=true&w=majority`;
 
+// Connect to MongoDB
 async function connectToMongoDB() {
   try {
-    await mongoose.connect(uri); // Connect to MongoDB
+    await mongoose.connect(uri);
     console.log("Connected to MongoDB");
   } catch (error) {
     console.error("MongoDB connection error:", error);
   }
 }
+connectToMongoDB();
 
-connectToMongoDB(); // Invoke MongoDB connection function
-
+// Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3053", // Allow requests from this origin
-    methods: ["GET", "POST"], // Allowed HTTP methods
+    origin: "http://localhost:3053",
+    methods: ["GET", "POST"],
   },
 });
 
-const rooms = {}; // Object to store room data
+// Object to store room data
+const rooms = {};
 
 io.on("connection", (socket) => {
   console.log("a user connected");
 
-  socket.on("joinRoom", async (roomId) => {
-    // Check if the roomId exists in the database
-    let doc = await Document.findById(roomId);
-
-    if (!doc) {
-      // If roomId doesn't exist, create a new document in MongoDB
-      doc = await Document.create({ _id: roomId, content: "" });
+  // Join a room and update user list
+  socket.on("joinRoom", async (roomId, userId) => {
+    try {
+      let doc = await Document.findById(roomId);
+      if (!doc) {
+        // If the document doesn't exist, create a new one
+        doc = await Document.create({
+          _id: roomId,
+          content: "",
+          users: [userId], // Add the user ID to the users array
+        });
+      } else {
+        // If the document exists, proceed with normal operations
+        if (!doc.users || !doc.users.includes(userId)) {
+          // If the users array doesn't exist or the user is not included, update it
+          doc.users = doc.users || [];
+          doc.users.push(userId);
+          await doc.save();
+        }
+      }
+      socket.join(roomId);
+      io.to(roomId).emit("updateText", doc.content);
+    } catch (error) {
+      console.error("Error joining room:", error);
     }
-
-    // Join the socket to the room
-    socket.join(roomId);
-
-    // Send the document content to the newly joined user
-    io.to(roomId).emit("updateText", doc.content);
   });
 
-  socket.on("textChange", async ({ roomId, newText }) => {
-    // Update the document content in MongoDB
-    await Document.findByIdAndUpdate(roomId, { content: newText });
-
-    // Broadcast the updated text to all users in the room
-    io.to(roomId).emit("updateText", newText);
+  // Handle text changes and update user list
+  socket.on("textChange", async ({ roomId, newText, userId }) => {
+    try {
+      await Document.findByIdAndUpdate(roomId, { content: newText });
+      let doc = await Document.findById(roomId);
+      if (!doc.users.includes(userId)) {
+        doc.users.push(userId);
+        await doc.save();
+      }
+      io.to(roomId).emit("updateText", newText);
+    } catch (error) {
+      console.error("Error handling text change:", error);
+    }
   });
 
   // Handle disconnection
@@ -65,7 +94,23 @@ io.on("connection", (socket) => {
   });
 });
 
+// Start the server
 const PORT = 3003;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
+// // User authentication routes (not implemented)
+// app.post("/signup", (req, res) => {
+//   // Signup logic
+// });
+
+// app.post("/login", (req, res) => {
+//   // Login logic
+// });
+
+// Import user authentication routes
+
+// Use user authentication routes
+app.use("/auth", authRoutes);
+app.use("/documents", documentRoutes);

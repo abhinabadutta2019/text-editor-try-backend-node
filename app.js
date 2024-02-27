@@ -46,25 +46,13 @@ const rooms = {};
 io.on("connection", (socket) => {
   console.log("a user connected");
 
-  // Inside the connection event handler in your server-side code
   socket.on("joinRoom", async ({ roomId, userId }) => {
     try {
       let doc = await Document.findById(roomId);
       if (!doc) {
-        // If the document doesn't exist, create a new one
-        doc = await Document.create({
-          _id: roomId,
-          content: "",
-          users: [userId], // Add the user ID to the users array
-        });
-      } else {
-        // If the document exists, proceed with normal operations
-        if (!doc.users || !doc.users.includes(userId)) {
-          // If the users array doesn't exist or the user is not included, update it
-          doc.users = doc.users || [];
-          doc.users.push(userId);
-          await doc.save();
-        }
+        // If the document doesn't exist, emit an event to notify the client
+        io.to(socket.id).emit("documentNotFound");
+        return;
       }
       socket.join(roomId);
       io.to(roomId).emit("updateText", doc.content);
@@ -76,8 +64,13 @@ io.on("connection", (socket) => {
   // Handle text changes and update user list
   socket.on("textChange", async ({ roomId, newText, userId }) => {
     try {
-      await Document.findByIdAndUpdate(roomId, { content: newText });
       let doc = await Document.findById(roomId);
+      if (!doc) {
+        // If the document doesn't exist, emit an event to notify the client
+        io.to(socket.id).emit("documentNotFound");
+        return;
+      }
+      await Document.findByIdAndUpdate(roomId, { content: newText });
       if (!doc.users.includes(userId)) {
         doc.users.push(userId);
         await doc.save();

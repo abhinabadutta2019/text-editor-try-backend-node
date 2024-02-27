@@ -33,6 +33,7 @@ async function connectToMongoDB() {
 connectToMongoDB();
 
 // Socket.io setup
+// Socket.io setup
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:3053",
@@ -55,6 +56,13 @@ io.on("connection", (socket) => {
         return;
       }
       socket.join(roomId);
+
+      // Add the user's user ID to the document's users array
+      if (!doc.users.includes(userId)) {
+        doc.users.push(userId);
+        await doc.save();
+      }
+
       io.to(roomId).emit("updateText", doc.content);
     } catch (error) {
       console.error("Error joining room:", error);

@@ -36,7 +36,7 @@ connectToMongoDB();
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3053",
+    origin: "https://scribble-space.onrender.com",
     methods: ["GET", "POST"],
   },
 });
